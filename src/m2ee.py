@@ -23,7 +23,7 @@ import sys
 import yaml
 
 import m2ee
-from m2ee import pgutil, M2EE, client_errno
+from m2ee import pgutil, M2EE, client_errno, metering
 
 logger = logging
 
@@ -872,6 +872,9 @@ class CLI(cmd.Cmd, object):
             suggestions[0] = "%s " % suggestions[0]
         return suggestions
 
+    def do_export_usage_metrics(self, args):
+        metering.metering_export_usage_metrics(self.m2ee.config)
+
     def do_help(self, args):
         print("""Welcome to m2ee, the Mendix Runtime helper tools.
 
@@ -890,6 +893,7 @@ Available commands:
  about - show Mendix Runtime version information
  check_constants - check for missing or unneeded constant definitions
  enable_debugger - enable remote debugger API
+ export_usage_metrics - export usage metrics
  disable_debugger - disable remote debugger API
  show_debugger_status - show whether debugger is enabled or not
  show_current_runtime_requests - show action stack of current running requests
