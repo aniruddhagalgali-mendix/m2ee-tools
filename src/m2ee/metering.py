@@ -67,7 +67,38 @@ def metering_guess_email_columns(config):
         logger.error(e)
 
 
+def metering_query_usage(config):
+    try:
+        # the base query
+        query = "SELECT u.name, u.lastlogin, u.webserviceuser, u.blocked, u.active, u.isanonymous, ur.usertype, "
+        # check for email address
+        table_email_column = metering_guess_email_columns(config)
+        if table_email_column:
+            projection = "CONCAT("
+            joins = list()
+            # iterate over the table_email_column to form the CONCAT and JOIN part of the query
+            for i, (k, v) in enumerate(table_email_column.items()):
+                projection += "mailfield_" + str(i) + "." + v + ","
+                joins.append("LEFT JOIN " + k + " mailfield_" + str(i) + " on mailfield_" + str(i) + ".id = u.id ")
+            # remove the last ,
+            projection = projection[:-1]
+            projection += ") as email "
+            query += projection
+        query += "FROM system$user u LEFT JOIN system$userreportinfo_user ur_u on u.id = ur_u.system$userid LEFT JOIN " \
+                 "system$userreportinfo ur on ur.id = ur_u.system$userreportinfoid "
+        # append the JOIN to the query
+        if table_email_column:
+            for join in joins:
+                query += join
+        logger.debug("Constructed query: <" + query + ">")
+        output = metering_run_pg_query(config,query)
+        logger.debug("Output from the query:\n" + output)
+        return output
+    except Exception as e:
+        logger.error(e)
+
+
 def metering_export_usage_metrics(config):
     logger.info("Begin exporting usage metrics")
-    logger.info(metering_guess_email_columns(config))
+    logger.info(metering_query_usage(config))
     logger.info("End exporting usage metrics")
