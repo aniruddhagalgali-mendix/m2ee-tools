@@ -4,6 +4,7 @@
 #
 
 from __future__ import print_function
+
 import argparse
 import atexit
 import cmd
@@ -18,16 +19,18 @@ import signal
 import string
 import subprocess
 import sys
+
 import yaml
 
-from m2ee import pgutil, M2EE, client_errno
 import m2ee
+from m2ee import pgutil, M2EE, client_errno
 
 logger = logging
 
 if not sys.stdout.isatty():
     import codecs
     import locale
+
     sys.stdout = codecs.getwriter(locale.getpreferredencoding())(sys.stdout)
 
 try:
@@ -313,7 +316,7 @@ class CLI(cmd.Cmd, object):
             errorline.insert(
                 0,
                 datetime.datetime.fromtimestamp(error['timestamp'] / 1000)
-                .strftime("%Y-%m-%d %H:%M:%S")
+                    .strftime("%Y-%m-%d %H:%M:%S")
             )
             print(' '.join(errorline))
 
@@ -370,7 +373,7 @@ class CLI(cmd.Cmd, object):
         feedback = self.m2ee.client.get_license_information()
         if 'license' in feedback:
             logger.debug(yaml.safe_dump(feedback['license'],
-                         allow_unicode=True))
+                                        allow_unicode=True))
             import copy
             licensecopy = copy.deepcopy(feedback['license'])
             self._print_license(licensecopy)
@@ -790,7 +793,7 @@ class CLI(cmd.Cmd, object):
         self.m2ee.cleanup_runtimes_except(args.split())
 
     def complete_cleanup_runtimes_except(self, text, line, begidx, endidx):
-        words = line[:len(line)-len(text)].split()
+        words = line[:len(line) - len(text)].split()
         found_versions = self.m2ee.list_installed_runtimes()
         return ["%s " % version for version in found_versions
                 if version.startswith(text)
