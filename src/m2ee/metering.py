@@ -76,7 +76,8 @@ def metering_guess_email_columns(config):
 def metering_query_usage(config):
     try:
         # the base query
-        query = "SELECT u.name, u.lastlogin, u.webserviceuser, u.blocked, u.active, u.isanonymous, ur.usertype, "
+        query = "SELECT u.name, u.lastlogin, u.webserviceuser, u.blocked, u.active, u.isanonymous as is_anonymous, " \
+                "ur.usertype, "
         # check for email address
         table_email_column = metering_guess_email_columns(config)
         if table_email_column:
@@ -150,7 +151,7 @@ def metering_massage_and_encrypt_data(object_dict):
                 object_dict["name"] = metering_encrypt("name")
                 email_name_processed = True
         # isAnonymous needs to be kept empty if empty
-        if col_name == "isanonymous":
+        if col_name == "is_anonymous":
             if value == "":
                 object_dict[col_name] = ""
             else:
