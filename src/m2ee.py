@@ -873,7 +873,7 @@ class CLI(cmd.Cmd, object):
         return suggestions
 
     def do_export_usage_metrics(self, args):
-        metering.metering_export_usage_metrics(self.m2ee.config)
+        metering.metering_export_usage_metrics(self.m2ee)
 
     def do_help(self, args):
         print("""Welcome to m2ee, the Mendix Runtime helper tools.

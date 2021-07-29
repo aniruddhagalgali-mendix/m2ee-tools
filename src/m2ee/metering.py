@@ -9,6 +9,8 @@ import os
 import subprocess
 import time
 
+from m2ee.client import M2EEAdminNotAvailable
+
 logger = logging.getLogger(__name__)
 usage_metrics_schema_version = "1.1"
 output_json_file = "mendix_usage_metrics.json"
@@ -98,7 +100,7 @@ def metering_query_usage(config):
             for join in joins:
                 query += join
         logger.debug("Constructed query: <" + query + ">")
-        output = metering_run_pg_query(config,query)
+        output = metering_run_pg_query(config, query)
         logger.debug("Output from the query:\n" + output)
         return output
     except Exception as e:
@@ -165,9 +167,16 @@ def metering_massage_and_encrypt_data(object_dict):
             object_dict[col_name] = "true" if value == "t" else "false"
 
 
-def metering_get_usage_metrics_json(config):
+def get_server_id(client):
     try:
-        query_output = metering_query_usage(config)
+        return client.get_license_information()["license_id"]
+    except M2EEAdminNotAvailable as e:
+        raise Exception("The application process is not running.")
+
+
+def metering_get_usage_metrics_json(m2ee):
+    try:
+        query_output = metering_query_usage(m2ee.config)
         usage_metrics_list = []
         fields = []
         user_usage_metrics_dict = {}
@@ -183,6 +192,7 @@ def metering_get_usage_metrics_json(config):
                     timestamp = datetime.datetime.now()
                     user_usage_metrics_dict["created_at"] = str(timestamp)
                     user_usage_metrics_dict["schema_version"] = usage_metrics_schema_version
+                    user_usage_metrics_dict["server_id"] = get_server_id(m2ee.client)
                     metering_massage_and_encrypt_data(user_usage_metrics_dict)
                     usage_metrics_list.append(user_usage_metrics_dict.copy())
                     user_usage_metrics_dict.clear()
@@ -195,9 +205,13 @@ def metering_get_usage_metrics_json(config):
         logger.error(e)
 
 
-def metering_export_usage_metrics(config):
-    logger.info("Begin exporting usage metrics")
-    usage_metrics_json = metering_get_usage_metrics_json(config)
-    with open(output_json_file, "w") as outfile:
-        outfile.write(usage_metrics_json)
-    logger.info("Usage metrics exported to " + output_json_file)
+def metering_export_usage_metrics(m2ee):
+    try:
+        logger.info("Begin exporting usage metrics")
+        usage_metrics_json = metering_get_usage_metrics_json(m2ee)
+        if not usage_metrics_json is None:
+            with open(output_json_file, "w") as outfile:
+                outfile.write(usage_metrics_json)
+            logger.info("Usage metrics exported to " + output_json_file)
+    except Exception as e:
+        logger.error(e)
