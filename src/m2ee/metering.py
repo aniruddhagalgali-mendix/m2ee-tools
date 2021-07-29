@@ -1,11 +1,17 @@
 #
 # Copyright (C) 2021 Mendix. All rights reserved.
 #
+import datetime
+import hashlib
+import json
 import logging
 import os
 import subprocess
+import time
 
 logger = logging.getLogger(__name__)
+usage_metrics_schema_version = "1.1"
+output_json_file = "mendix_usage_metrics.json"
 
 
 def metering_run_pg_query(config, query):
@@ -98,7 +104,99 @@ def metering_query_usage(config):
         logger.error(e)
 
 
+def metering_encrypt(name):
+    salt = [53, 14, 215, 17, 147, 90, 22, 81, 48, 249, 140, 146, 201, 247, 182, 18, 218, 242, 114, 5, 255, 202, 227,
+            242, 126, 235, 162, 38, 52, 150, 95, 193]
+    salt_byte_array = bytes(salt)
+    encoded_name = name.encode()
+    byte_array = bytearray(encoded_name)
+    h = hashlib.sha256()
+    h.update(salt_byte_array)
+    h.update(byte_array)
+    return h.hexdigest()
+
+
+def metering_extract_and_hash_domain_from_email(email):
+    if not isinstance(email, str):
+        return ""
+    if email == "":
+        return ""
+    domain = ""
+    if email.find("@") != -1:
+        domain = str(email).split("@")[1]
+    if len(domain) >= 2:
+        return metering_encrypt(domain)
+    else:
+        return ""
+
+
+def metering_massage_and_encrypt_data(object_dict):
+    email_name_processed = False
+    for col_name, value in object_dict.items():
+        if col_name == "active":
+            object_dict[col_name] = "true" if value == "t" else "false"
+        if col_name == "blocked":
+            object_dict[col_name] = "true" if value == "t" else "false"
+        if col_name == "email" or col_name == "name":
+            if not email_name_processed:
+                name = object_dict["name"]
+                email = object_dict["email"]
+                # prefer email in name over email field
+                hashed_email_domain = metering_extract_and_hash_domain_from_email(name)
+                if hashed_email_domain == "":
+                    hashed_email_domain = metering_extract_and_hash_domain_from_email(email)
+                object_dict["email_domain"] = hashed_email_domain
+                del object_dict["email"]
+                object_dict["name"] = metering_encrypt("name")
+                email_name_processed = True
+        # isAnonymous needs to be kept empty if empty
+        if col_name == "isanonymous":
+            if value == "":
+                object_dict[col_name] = ""
+            else:
+                object_dict[col_name] = "true" if value == "t" else "false"
+        if col_name == "lastlogin":
+            # convert to epoch
+            if not value == "":
+                object_dict[col_name] = (int(time.mktime(datetime.datetime.strptime(
+                    value, "%Y-%m-%d %H:%M:%S.%f").timetuple())))
+        if col_name == "webserviceuser":
+            object_dict[col_name] = "true" if value == "t" else "false"
+
+
+def metering_get_usage_metrics_json(config):
+    try:
+        query_output = metering_query_usage(config)
+        usage_metrics_list = []
+        fields = []
+        user_usage_metrics_dict = {}
+        for row_num, row in enumerate(query_output.split('\n')):
+            if row_num == 0:
+                for field in row.split('|'):
+                    fields.append(field.strip())
+            else:
+                # ignore the empty rows and the one that prints no of rows
+                if len(row.split('|')) == 8:
+                    for col_num, value in enumerate(row.split('|')):
+                        user_usage_metrics_dict[fields[col_num]] = value.strip()
+                    timestamp = datetime.datetime.now()
+                    user_usage_metrics_dict["created_at"] = str(timestamp)
+                    user_usage_metrics_dict["schema_version"] = usage_metrics_schema_version
+                    metering_massage_and_encrypt_data(user_usage_metrics_dict)
+                    usage_metrics_list.append(user_usage_metrics_dict.copy())
+                    user_usage_metrics_dict.clear()
+        json_dictionary = json.dumps(usage_metrics_list, indent=4, sort_keys=True)
+        logger.debug("BEGIN Usage JSON")
+        logger.debug(json_dictionary)
+        logger.debug("END Usage JSON")
+        return json_dictionary
+    except Exception as e:
+        logger.error(e)
+
+
 def metering_export_usage_metrics(config):
     logger.info("Begin exporting usage metrics")
-    logger.info(metering_query_usage(config))
-    logger.info("End exporting usage metrics")
+    usage_metrics_json = metering_get_usage_metrics_json(config)
+    with open(output_json_file, "w") as outfile:
+        outfile.write(usage_metrics_json)
+    logger.info("Usage metrics exported to " + output_json_file)
