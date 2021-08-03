@@ -58,18 +58,20 @@ def metering_get_user_specialization_tables(config):
 def metering_guess_email_columns(config):
     try:
         table_email_column = dict()
-        query = "SELECT table_name,column_name FROM information_schema.columns WHERE table_name in (" \
-                + metering_get_user_specialization_tables(config) + ") and column_name like '%%mail%%'"
-        output = metering_run_pg_query(config, query)
-        for num, row in enumerate(output.split('\n')):
-            # ignore the first two rows which print the table name and ----
-            if num > 1:
-                if row.find("rows") == -1:
-                    row = row.strip().lower()
-                    if row != "":
-                        table_email_column[row.split('|')[0].strip()] = row.split('|')[1].strip()
-        logger.debug("Probable tables and columns that may have an email address are:")
-        logger.debug(table_email_column)
+        user_specialization_tables = metering_get_user_specialization_tables(config)
+        if len(user_specialization_tables) > 0:
+            query = "SELECT table_name,column_name FROM information_schema.columns WHERE table_name in (" \
+                    + user_specialization_tables + ") and column_name like '%%mail%%'"
+            output = metering_run_pg_query(config, query)
+            for num, row in enumerate(output.split('\n')):
+                # ignore the first two rows which print the table name and ----
+                if num > 1:
+                    if row.find("rows") == -1:
+                        row = row.strip().lower()
+                        if row != "":
+                            table_email_column[row.split('|')[0].strip()] = row.split('|')[1].strip()
+            logger.debug("Probable tables and columns that may have an email address are:")
+            logger.debug(table_email_column)
         return table_email_column
     except Exception as e:
         logger.error(e)
@@ -91,9 +93,12 @@ def metering_query_usage(config):
                 joins.append("LEFT JOIN " + k + " mailfield_" + str(i) + " on mailfield_" + str(i) + ".id = u.id ")
             # remove the last ,
             projection = projection[:-1]
-            projection += ") as email "
+            projection += ") as email"
             query += projection
-        query += "FROM system$user u LEFT JOIN system$userreportinfo_user ur_u on u.id = ur_u.system$userid LEFT JOIN " \
+        else:
+            # remove the trailing , from the query
+            query = query [:-2]
+        query += " FROM system$user u LEFT JOIN system$userreportinfo_user ur_u on u.id = ur_u.system$userid LEFT JOIN " \
                  "system$userreportinfo ur on ur.id = ur_u.system$userreportinfoid "
         # append the JOIN to the query
         if table_email_column:
