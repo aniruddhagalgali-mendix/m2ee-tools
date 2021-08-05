@@ -79,6 +79,7 @@ def metering_guess_email_columns(config):
 
 def metering_query_usage(config):
     try:
+        logger.debug(str(datetime.datetime.now()) + "-Begin metering_query_usage")
         # the base query
         query = "SELECT u.name, u.lastlogin, u.webserviceuser, u.blocked, u.active, u.isanonymous as is_anonymous, " \
                 "ur.usertype, "
@@ -97,7 +98,7 @@ def metering_query_usage(config):
             query += projection
         else:
             # remove the trailing , from the query
-            query = query [:-2]
+            query = query[:-2]
         query += " FROM system$user u LEFT JOIN system$userreportinfo_user ur_u on u.id = ur_u.system$userid LEFT JOIN " \
                  "system$userreportinfo ur on ur.id = ur_u.system$userreportinfoid "
         # append the JOIN to the query
@@ -106,7 +107,7 @@ def metering_query_usage(config):
                 query += join
         logger.debug("Constructed query: <" + query + ">")
         output = metering_run_pg_query(config, query)
-        logger.debug("Output from the query:\n" + output)
+        logger.debug(str(datetime.datetime.now()) + "-End metering_query_usage")
         return output
     except Exception as e:
         logger.error(e)
@@ -179,12 +180,15 @@ def get_server_id(client):
         raise Exception("The application process is not running.")
 
 
-def metering_get_usage_metrics_json(m2ee):
+def metering_export_usage_metrics(m2ee):
     try:
+        logger.info(str(datetime.datetime.now()) + "-Begin exporting usage metrics")
         query_output = metering_query_usage(m2ee.config)
-        usage_metrics_list = []
+        server_id = get_server_id(m2ee.client)
         fields = []
         user_usage_metrics_dict = {}
+        out_file = open(output_json_file, "w")
+        out_file.write("[\n")
         for row_num, row in enumerate(query_output.split('\n')):
             if row_num == 0:
                 for field in row.split('|'):
@@ -197,26 +201,17 @@ def metering_get_usage_metrics_json(m2ee):
                     timestamp = datetime.datetime.now()
                     user_usage_metrics_dict["created_at"] = str(timestamp)
                     user_usage_metrics_dict["schema_version"] = usage_metrics_schema_version
-                    user_usage_metrics_dict["server_id"] = get_server_id(m2ee.client)
+                    user_usage_metrics_dict["server_id"] = server_id
                     metering_massage_and_encrypt_data(user_usage_metrics_dict)
-                    usage_metrics_list.append(user_usage_metrics_dict.copy())
+                    # row_num 1 is ---------+-----+----+
+                    if row_num == 2:
+                        json.dump(user_usage_metrics_dict, out_file, indent=4, sort_keys=True)
+                    else:
+                        out_file.write(",\n")
+                        json.dump(user_usage_metrics_dict, out_file, indent=4, sort_keys=True)
                     user_usage_metrics_dict.clear()
-        json_dictionary = json.dumps(usage_metrics_list, indent=4, sort_keys=True)
-        logger.debug("BEGIN Usage JSON")
-        logger.debug(json_dictionary)
-        logger.debug("END Usage JSON")
-        return json_dictionary
-    except Exception as e:
-        logger.error(e)
-
-
-def metering_export_usage_metrics(m2ee):
-    try:
-        logger.info("Begin exporting usage metrics")
-        usage_metrics_json = metering_get_usage_metrics_json(m2ee)
-        if not usage_metrics_json is None:
-            with open(output_json_file, "w") as outfile:
-                outfile.write(usage_metrics_json)
-            logger.info("Usage metrics exported to " + output_json_file)
+        out_file.write("\n]")
+        out_file.close()
+        logger.info(str(datetime.datetime.now()) + "-Usage metrics exported to " + output_json_file)
     except Exception as e:
         logger.error(e)
