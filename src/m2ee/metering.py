@@ -13,8 +13,6 @@ from m2ee.client import M2EEAdminNotAvailable
 
 logger = logging.getLogger(__name__)
 usage_metrics_schema_version = "1.1"
-output_json_file = "mendix_usage_metrics.json"
-page_size = 50000
 
 
 def metering_run_pg_query(config, query):
@@ -78,7 +76,7 @@ def metering_guess_email_columns(config):
         logger.error(e)
 
 
-def metering_query_usage(config, offset=0):
+def metering_query_usage(config, page_size=0, offset=0):
     try:
         logger.debug(str(datetime.datetime.now()) + "-Begin metering_query_usage")
         # the base query
@@ -106,7 +104,9 @@ def metering_query_usage(config, offset=0):
         if table_email_column:
             for join in joins:
                 query += join
-        query += " WHERE u.name IS NOT NULL ORDER BY u.id LIMIT " + str(page_size) + " OFFSET " + str(offset)
+        query += " WHERE u.name IS NOT NULL ORDER BY u.id"
+        if page_size > 0:
+            query += " LIMIT " + str(page_size) + " OFFSET " + str(offset)
         logger.debug("Constructed query: <" + query + ">")
         output = metering_run_pg_query(config, query)
         logger.debug(str(datetime.datetime.now()) + "-End metering_query_usage")
@@ -189,13 +189,19 @@ def metering_export_usage_metrics(m2ee):
         user_count_query = "SELECT count(id) FROM system$user"
         user_count_query_output = metering_run_pg_query(m2ee.config, user_count_query)
         user_count = int(user_count_query_output.split('\n')[2].strip())
+        # get page size from config
+        page_size = m2ee.config.get_usage_metrics_page_size()
+        if page_size == 0:
+            # user does not want pagination
+            page_size = user_count
+        output_json_file = m2ee.config.get_usage_metrics_output_file_name() + "_" + str(int(time.time())) + ".json"
         out_file = open(output_json_file, "w")
         out_file.write("[\n")
         for offset in range(0, user_count, page_size):
             if page_size < user_count:
                 logger.info("Processing " + str(offset + 1) + " to " + str(offset + page_size) +
                         " of " + str(user_count) + " records")
-            query_output = metering_query_usage(m2ee.config, offset)
+            query_output = metering_query_usage(m2ee.config, page_size, offset)
             server_id = get_server_id(m2ee.client)
             fields = []
             user_usage_metrics_dict = {}

@@ -634,6 +634,12 @@ class M2EEConfig:
     def get_max_active_db_connections(self):
         return self._conf['mxruntime'].get('ConnectionPoolingMaxActive', 50)
 
+    def get_usage_metrics_page_size(self):
+        return self._conf['metering'].get('usage_metrics_page_size', 0)
+
+    def get_usage_metrics_output_file_name(self):
+        return self._conf['metering'].get('usage_metrics_output_file_name', 'mendix_usage_metrics')
+
 
 def find_yaml_files():
     yaml_files = []
