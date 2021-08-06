@@ -105,6 +105,7 @@ def metering_query_usage(config):
         if table_email_column:
             for join in joins:
                 query += join
+        query += " WHERE u.name IS NOT NULL"
         logger.debug("Constructed query: <" + query + ">")
         output = metering_run_pg_query(config, query)
         logger.debug(str(datetime.datetime.now()) + "-End metering_query_usage")
